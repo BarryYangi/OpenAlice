@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 
-export function ReconnectButton({ provider }: { provider: string }) {
+export function ReconnectButton({ accountId }: { accountId: string }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -12,14 +12,7 @@ export function ReconnectButton({ provider }: { provider: string }) {
     setStatus('loading')
     setMessage('')
     try {
-      const { accounts } = await api.trading.listAccounts()
-      const target = accounts.find(a => a.provider === provider)
-      if (!target) {
-        setStatus('error')
-        setMessage(`No ${provider} account found`)
-        return
-      }
-      const result = await api.trading.reconnectAccount(target.id)
+      const result = await api.trading.reconnectAccount(accountId)
       if (result.success) {
         setStatus('success')
         setMessage(result.message || 'Connected')

@@ -156,3 +156,39 @@ export interface ReconnectResult {
   error?: string
   message?: string
 }
+
+// ==================== Trading Config ====================
+
+export interface CcxtPlatformConfig {
+  id: string
+  label?: string
+  type: 'ccxt'
+  exchange: string
+  sandbox: boolean
+  demoTrading: boolean
+  defaultMarketType: 'spot' | 'swap'
+}
+
+export interface AlpacaPlatformConfig {
+  id: string
+  label?: string
+  type: 'alpaca'
+  paper: boolean
+}
+
+export type PlatformConfig = CcxtPlatformConfig | AlpacaPlatformConfig
+
+export interface AccountConfig {
+  id: string
+  platformId: string
+  label?: string
+  apiKey?: string
+  apiSecret?: string
+  password?: string
+  guards: GuardEntry[]
+}
+
+export interface GuardEntry {
+  type: string
+  options: Record<string, unknown>
+}

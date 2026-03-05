@@ -110,9 +110,9 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    prefix: 'trading',
+    page: 'trading' as const,
     label: 'Trading',
-    icon: (active) => (
+    icon: (active: boolean) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 20h20" />
         <path d="M5 17V10" /><path d="M5 7V4" /><path d="M3 10h4" /><path d="M3 7h4" />
@@ -121,10 +121,6 @@ const NAV_ITEMS: NavItem[] = [
         <path d="M20 17V14" /><path d="M20 11V8" /><path d="M18 14h4" /><path d="M18 11h4" />
       </svg>
     ),
-    children: [
-      { page: 'trading/accounts', label: 'Accounts' },
-      { page: 'trading/guards', label: 'Guards' },
-    ],
   },
   {
     page: 'ai-provider',

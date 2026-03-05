@@ -14,7 +14,7 @@ import { ToolsPage } from './pages/ToolsPage'
 
 export type Page =
   | 'chat' | 'portfolio' | 'events' | 'heartbeat' | 'data-sources' | 'connectors'
-  | 'trading/accounts' | 'trading/guards'
+  | 'trading'
   | 'ai-provider' | 'settings' | 'tools' | 'dev'
 
 export function App() {
@@ -51,7 +51,7 @@ export function App() {
         {page === 'heartbeat' && <HeartbeatPage />}
         {page === 'data-sources' && <DataSourcesPage />}
         {page === 'connectors' && <ConnectorsPage />}
-        {page.startsWith('trading/') && <TradingPage tab={page.split('/')[1]} />}
+        {page === 'trading' && <TradingPage />}
         {page === 'ai-provider' && <AIProviderPage />}
         {page === 'settings' && <SettingsPage />}
         {page === 'tools' && <ToolsPage />}

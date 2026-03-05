@@ -412,6 +412,30 @@ async function migrateLegacyTradingConfig(): Promise<{
   return { platforms, accounts }
 }
 
+// ==================== Platform / Account file helpers ====================
+
+export async function readPlatformsConfig(): Promise<PlatformConfig[]> {
+  const raw = await loadJsonFile('platforms.json')
+  return platformsFileSchema.parse(raw ?? [])
+}
+
+export async function writePlatformsConfig(platforms: PlatformConfig[]): Promise<void> {
+  const validated = platformsFileSchema.parse(platforms)
+  await mkdir(CONFIG_DIR, { recursive: true })
+  await writeFile(resolve(CONFIG_DIR, 'platforms.json'), JSON.stringify(validated, null, 2) + '\n')
+}
+
+export async function readAccountsConfig(): Promise<AccountConfig[]> {
+  const raw = await loadJsonFile('accounts.json')
+  return accountsFileSchema.parse(raw ?? [])
+}
+
+export async function writeAccountsConfig(accounts: AccountConfig[]): Promise<void> {
+  const validated = accountsFileSchema.parse(accounts)
+  await mkdir(CONFIG_DIR, { recursive: true })
+  await writeFile(resolve(CONFIG_DIR, 'accounts.json'), JSON.stringify(validated, null, 2) + '\n')
+}
+
 // ==================== Hot-read helpers ====================
 
 /** Read agent config from disk (called per-request for hot-reload). */
