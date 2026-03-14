@@ -393,6 +393,39 @@ describe('AgentCenter — session persistence', () => {
     expect(blocks[1]).toMatchObject({ type: 'tool_use', name: 'lookup' })
   })
 
+  it('A16: parallel tool calls in one step land in a single user message', async () => {
+    // Simulates what Vercel AI SDK emits when the model calls multiple tools at once:
+    // all tool_use events come first, then all tool_result events (one step).
+    const provider = new FakeProvider([
+      toolUseEvent('t1', 'get_price', { symbol: 'BTC' }),
+      toolUseEvent('t2', 'get_price', { symbol: 'ETH' }),
+      toolUseEvent('t3', 'get_price', { symbol: 'SOL' }),
+      toolResultEvent('t1', '95000'),
+      toolResultEvent('t2', '3200'),
+      toolResultEvent('t3', '140'),
+      textEvent('BTC $95k, ETH $3.2k, SOL $140'),
+      doneEvent('BTC $95k, ETH $3.2k, SOL $140'),
+    ])
+    const ac = makeAgentCenter(provider)
+    const session = new MemorySessionStore()
+
+    await ac.askWithSession('prices?', session)
+
+    const entries = await session.readAll()
+    const toolResultEntries = userEntries(entries).filter(u =>
+      Array.isArray(u.message.content) &&
+      (u.message.content as ContentBlock[]).some(b => b.type === 'tool_result'),
+    )
+
+    // All 3 results must be in a single user message — not 3 separate ones.
+    // This is required by Vercel AI SDK: toModelMessages() will throw
+    // MissingToolResultsError if results are spread across multiple messages.
+    expect(toolResultEntries).toHaveLength(1)
+    const resultBlocks = blocksOf(toolResultEntries[0]).filter(b => b.type === 'tool_result')
+    expect(resultBlocks).toHaveLength(3)
+    expect(resultBlocks.map(b => (b as { tool_use_id: string }).tool_use_id)).toEqual(['t1', 't2', 't3'])
+  })
+
   it('A15: providerTag carries through to intermediate writes too', async () => {
     const provider = new FakeProvider(
       [

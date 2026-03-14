@@ -120,6 +120,11 @@ export class AgentCenter {
     for await (const event of source) {
       switch (event.type) {
         case 'tool_use':
+          // Flush any pending tool results before starting a new assistant round
+          if (currentUserBlocks.length > 0) {
+            intermediateMessages.push({ role: 'user', content: currentUserBlocks })
+            currentUserBlocks = []
+          }
           // Unified logging — all providers get this now
           logToolCall(event.name, event.input)
           currentAssistantBlocks.push({
@@ -135,26 +140,29 @@ export class AgentCenter {
           // Unified media extraction + image stripping
           media.push(...extractMediaFromToolResultContent(event.content))
           const sessionContent = stripImageData(event.content)
+
+          // Flush assistant blocks before accumulating tool results
+          if (currentAssistantBlocks.length > 0) {
+            intermediateMessages.push({ role: 'assistant', content: currentAssistantBlocks })
+            currentAssistantBlocks = []
+          }
+          // Accumulate — parallel tool calls produce multiple results that must
+          // land in a single user message, so we flush only when the next round starts.
           currentUserBlocks.push({
             type: 'tool_result',
             tool_use_id: event.tool_use_id,
             content: sessionContent,
           })
-
-          // Flush assistant blocks before user blocks (tool_use → tool_result)
-          if (currentAssistantBlocks.length > 0) {
-            intermediateMessages.push({ role: 'assistant', content: currentAssistantBlocks })
-            currentAssistantBlocks = []
-          }
-          if (currentUserBlocks.length > 0) {
-            intermediateMessages.push({ role: 'user', content: currentUserBlocks })
-            currentUserBlocks = []
-          }
           yield event
           break
         }
 
         case 'text':
+          // Flush any pending tool results before assistant text (new round)
+          if (currentUserBlocks.length > 0) {
+            intermediateMessages.push({ role: 'user', content: currentUserBlocks })
+            currentUserBlocks = []
+          }
           currentAssistantBlocks.push({ type: 'text', text: event.text })
           yield event
           break
