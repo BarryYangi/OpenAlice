@@ -65,6 +65,12 @@ import { TagValue } from './tag-value.js'
 import { IneligibilityReason } from './ineligibility-reason.js'
 import { TickTypeEnum } from './tick-type.js'
 import { BAD_MESSAGE, UNKNOWN_ID } from './errors.js'
+// Protobuf message types
+import { CurrentTime as CurrentTimeProto } from './protobuf/CurrentTime.js'
+import { NextValidId as NextValidIdProto } from './protobuf/NextValidId.js'
+import { ErrorMessage as ErrorMessageProto } from './protobuf/ErrorMessage.js'
+import { ManagedAccounts as ManagedAccountsProto } from './protobuf/ManagedAccounts.js'
+import { CurrentTimeInMillis as CurrentTimeInMillisProto } from './protobuf/CurrentTimeInMillis.js'
 import {
   BarData,
   RealTimeBar,
@@ -122,6 +128,7 @@ export class Decoder {
   private wrapper: EWrapper
   private serverVersion: number
   private readonly msgId2handler: Map<number, (fields: Iterator<string>) => void>
+  private readonly msgId2protoHandler: Map<number, (buf: Buffer) => void>
 
   constructor(wrapper: EWrapper, serverVersion: number) {
     this.wrapper = wrapper
@@ -214,6 +221,15 @@ export class Decoder {
       [IN.HISTORICAL_DATA_END, (f) => this.processHistoricalDataEndMsg(f)],
       [IN.CURRENT_TIME_IN_MILLIS, (f) => this.processCurrentTimeInMillis(f)],
     ])
+
+    // Protobuf dispatch table
+    this.msgId2protoHandler = new Map<number, (buf: Buffer) => void>([
+      [IN.CURRENT_TIME, (b) => this.processCurrentTimeMsgProtoBuf(b)],
+      [IN.CURRENT_TIME_IN_MILLIS, (b) => this.processCurrentTimeInMillisMsgProtoBuf(b)],
+      [IN.NEXT_VALID_ID, (b) => this.processNextValidIdMsgProtoBuf(b)],
+      [IN.ERR_MSG, (b) => this.processErrorMsgProtoBuf(b)],
+      [IN.MANAGED_ACCTS, (b) => this.processManagedAccountsMsgProtoBuf(b)],
+    ])
   }
 
   // ----------------------------------------------------------------
@@ -256,14 +272,31 @@ export class Decoder {
 
   /**
    * Dispatch a protobuf-encoded message.
-   * For now, log unhandled protobuf messages rather than silently dropping them.
+   * Mirrors: ibapi/decoder.py processProtoBuf() + msgId2handleInfoProtoBuf
    */
   processProtoBuf(protoBuf: Buffer, msgId: number): void {
     if (msgId === 0) return
 
-    // TODO: implement protobuf dispatch table (msgId2handleInfoProtoBuf)
-    // For now, log that we received a protobuf message we can't decode yet
-    console.log(`[ibkr] unhandled protobuf message: msgId=${msgId}, len=${protoBuf.length}`)
+    const handler = this.msgId2protoHandler.get(msgId)
+    if (!handler) {
+      console.log(`[ibkr] unhandled protobuf message: msgId=${msgId}, len=${protoBuf.length}`)
+      return
+    }
+
+    try {
+      handler(protoBuf)
+    } catch (e) {
+      if (e instanceof BadMessage) {
+        this.wrapper.error(
+          NO_VALID_ID,
+          currentTimeMillis(),
+          BAD_MESSAGE.code(),
+          BAD_MESSAGE.msg() + `protobuf msgId=${msgId}`,
+          '',
+        )
+      }
+      throw e
+    }
   }
 
   // ----------------------------------------------------------------
@@ -1945,5 +1978,41 @@ export class Decoder {
   private readLastTradeDate(fields: Iterator<string>, contract: ContractDetails, isBond: boolean): void {
     const lastTradeDateOrContractMonth = decodeStr(fields)
     setLastTradeDate(lastTradeDateOrContractMonth, contract, isBond)
+  }
+
+  // ----------------------------------------------------------------
+  // Protobuf handlers
+  // Mirrors: ibapi/decoder.py processXxxMsgProtoBuf methods
+  // ----------------------------------------------------------------
+
+  private processCurrentTimeMsgProtoBuf(buf: Buffer): void {
+    const proto = CurrentTimeProto.decode(buf)
+    this.wrapper.currentTime(proto.currentTime ?? 0)
+  }
+
+  private processCurrentTimeInMillisMsgProtoBuf(buf: Buffer): void {
+    const proto = CurrentTimeInMillisProto.decode(buf)
+    this.wrapper.currentTimeInMillis(proto.currentTimeInMillis ?? 0)
+  }
+
+  private processNextValidIdMsgProtoBuf(buf: Buffer): void {
+    const proto = NextValidIdProto.decode(buf)
+    this.wrapper.nextValidId(proto.orderId ?? 0)
+  }
+
+  private processErrorMsgProtoBuf(buf: Buffer): void {
+    const proto = ErrorMessageProto.decode(buf)
+    this.wrapper.error(
+      proto.id ?? NO_VALID_ID,
+      proto.errorTime ?? 0,
+      proto.errorCode ?? 0,
+      proto.errorMsg ?? '',
+      proto.advancedOrderRejectJson ?? '',
+    )
+  }
+
+  private processManagedAccountsMsgProtoBuf(buf: Buffer): void {
+    const proto = ManagedAccountsProto.decode(buf)
+    this.wrapper.managedAccounts(proto.accountsList ?? '')
   }
 }
